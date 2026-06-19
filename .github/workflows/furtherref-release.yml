@@ -141,7 +141,7 @@ jobs:
           repository: ${{ env.BUILD_TOOLS_REPO }}
           ref: ${{ needs.meta.outputs.build_tools_ref }}
           path: build_tools
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Checkout DocumentServer
         uses: actions/checkout@v4
@@ -149,8 +149,28 @@ jobs:
           repository: ${{ env.DOCUMENTSERVER_REPO }}
           ref: ${{ needs.meta.outputs.documentserver_ref }}
           path: onlyoffice-documentserver
-          submodules: recursive
-          fetch-depth: 0
+          submodules: false
+          fetch-depth: 1
+
+      - name: Checkout DocumentServer submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C onlyoffice-documentserver submodule sync --recursive
+
+          for attempt in 1 2 3; do
+            if git -C onlyoffice-documentserver \
+              -c http.version=HTTP/1.1 \
+              submodule update --init --recursive --depth 1 --jobs 4; then
+              git -C onlyoffice-documentserver submodule status --recursive
+              exit 0
+            fi
+
+            echo "::warning::DocumentServer submodule checkout failed on attempt ${attempt}"
+            sleep $((attempt * 10))
+          done
+
+          exit 1
 
       - name: Checkout document-server-package
         uses: actions/checkout@v4
@@ -158,7 +178,7 @@ jobs:
           repository: ${{ env.PACKAGE_REPO }}
           ref: ${{ needs.meta.outputs.package_ref }}
           path: document-server-package
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Checkout document-server-integration
         uses: actions/checkout@v4
