@@ -2,6 +2,8 @@ name: Check DockerHub README limit
 
 on:
   push:
+    branches:
+      - "**"
     paths:
       - README.md
 
