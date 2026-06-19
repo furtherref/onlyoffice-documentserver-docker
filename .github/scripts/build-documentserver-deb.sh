@@ -101,6 +101,7 @@ cd "${BUILD_TOOLS_DIR}/tools/linux/sysroot"
 ./../python3/bin/python3 ./fetch.py all
 
 cd "${BUILD_TOOLS_DIR}"
+export PYTHONPATH="${BUILD_TOOLS_DIR}/scripts${PYTHONPATH:+:${PYTHONPATH}}"
 ./tools/linux/python3/bin/python3 ./configure.py \
   --update "0" \
   --branch "${SOURCE_REF:-${PRODUCT_VERSION}-${BUILD_NUMBER}}" \
