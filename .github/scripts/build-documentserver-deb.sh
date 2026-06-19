@@ -84,7 +84,11 @@ if [ ! -x "./qt_build/Qt-5.9.9/${QT_COMPILER}/bin/qmake" ]; then
 fi
 
 rm -f ./packages_complete
+export npm_config_force=true
+export NPM_CONFIG_FORCE=true
 ./python3/bin/python3 ./deps.py
+unset npm_config_force
+unset NPM_CONFIG_FORCE
 sudo ./cmake.sh
 
 cd "${BUILD_TOOLS_DIR}/tools/linux/sysroot"
