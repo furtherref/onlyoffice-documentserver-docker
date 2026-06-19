@@ -4,24 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       package_version:
-        description: "Package version, for example 9.4.0-129"
+        description: "Package version, for example 9.4.0-130"
         required: true
-        default: "9.4.0-129"
+        default: "9.4.0-130"
         type: string
       documentserver_ref:
         description: "Ref in furtherref/onlyoffice-documentserver"
         required: false
-        default: "9.4.0-129"
+        default: "9.4.0"
         type: string
       build_tools_ref:
         description: "Ref in furtherref/onlyoffice-build-tools"
         required: false
-        default: "9.4.0-129"
+        default: "9.4.0"
         type: string
       package_ref:
         description: "Ref in furtherref/onlyoffice-documentserver-package"
         required: false
-        default: "9.4.0-129"
+        default: "9.4.0"
         type: string
       push_latest:
         description: "Also push ghcr.io/furtherref/documentserver:latest"
@@ -77,13 +77,13 @@ jobs:
           fi
 
           if [[ ! "${PACKAGE_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)$ ]]; then
-            echo "::error::Package version must look like 9.4.0-129, got '${PACKAGE_VERSION}'"
+            echo "::error::Package version must look like 9.4.0-130, got '${PACKAGE_VERSION}'"
             exit 1
           fi
 
           PRODUCT_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
           BUILD_NUMBER="${BASH_REMATCH[4]}"
-          SOURCE_REF="${PACKAGE_VERSION}"
+          SOURCE_REF="${PRODUCT_VERSION}"
 
           DOCUMENTSERVER_REF="${INPUT_DOCUMENTSERVER_REF:-${SOURCE_REF}}"
           BUILD_TOOLS_REF="${INPUT_BUILD_TOOLS_REF:-${SOURCE_REF}}"
