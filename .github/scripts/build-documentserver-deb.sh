@@ -21,6 +21,7 @@ DOCUMENTSERVER_DIR="${WORKSPACE_DIR}/onlyoffice-documentserver"
 PACKAGE_DIR="${WORKSPACE_DIR}/document-server-package"
 ARTIFACT_DIR="${WORKSPACE_DIR}/artifacts"
 QT_TARGET="${QT_TARGET:-${DEB_ARCH}}"
+HOST_ARCH="$(uname -m)"
 
 if [ ! -d "${BUILD_TOOLS_DIR}" ]; then
   echo "::error::build_tools checkout is missing at ${BUILD_TOOLS_DIR}" >&2
@@ -61,15 +62,23 @@ sudo apt-get install -y \
   python-is-python3 \
   xz-utils
 
+if [ "${DEB_ARCH}" = "arm64" ]; then
+  case "${HOST_ARCH}" in
+    x86_64|amd64)
+      sudo apt-get install -y qemu-user qemu-user-static binfmt-support
+      sudo update-binfmts --enable qemu-aarch64 || true
+      ;;
+    *)
+      echo "::error::arm64 DocumentServer deb builds must run on an x86_64 host and cross-compile via qemu/sysroot; current host is ${HOST_ARCH}" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 git lfs install --local || true
 
 cd "${BUILD_TOOLS_DIR}/tools/linux"
-if [ "${DEB_ARCH}" = "arm64" ]; then
-  rm -rf ./python3
-  mkdir -p ./python3/bin
-  ln -s "$(command -v python3)" ./python3/bin/python3
-  ln -s python3 ./python3/bin/python
-elif [ ! -x ./python3/bin/python3 ]; then
+if [ ! -x ./python3/bin/python3 ]; then
   ./python.sh
 fi
 

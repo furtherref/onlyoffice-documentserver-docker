@@ -125,7 +125,7 @@ jobs:
             package_uname_m: x86_64
             qt_target: amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-24.04
             build_platform: linux_arm64
             package_uname_m: aarch64
             qt_target: arm64
