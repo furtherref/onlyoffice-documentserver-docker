@@ -1,0 +1,297 @@
+name: FurtherRef multi-arch release
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_version:
+        description: "Package version, for example 9.4.0-129"
+        required: true
+        default: "9.4.0-129"
+        type: string
+      documentserver_ref:
+        description: "Ref in furtherref/onlyoffice-documentserver"
+        required: false
+        default: "9.4.0-129"
+        type: string
+      build_tools_ref:
+        description: "Ref in furtherref/onlyoffice-build-tools"
+        required: false
+        default: "9.4.0-129"
+        type: string
+      package_ref:
+        description: "Ref in furtherref/onlyoffice-documentserver-package"
+        required: false
+        default: "9.4.0-129"
+        type: string
+      push_latest:
+        description: "Also push ghcr.io/furtherref/documentserver:latest"
+        required: true
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/documentserver
+  DOCUMENTSERVER_REPO: furtherref/onlyoffice-documentserver
+  BUILD_TOOLS_REPO: furtherref/onlyoffice-build-tools
+  PACKAGE_REPO: furtherref/onlyoffice-documentserver-package
+
+jobs:
+  meta:
+    name: Resolve release metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      product_version: ${{ steps.meta.outputs.product_version }}
+      build_number: ${{ steps.meta.outputs.build_number }}
+      package_version: ${{ steps.meta.outputs.package_version }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      source_ref: ${{ steps.meta.outputs.source_ref }}
+      documentserver_ref: ${{ steps.meta.outputs.documentserver_ref }}
+      build_tools_ref: ${{ steps.meta.outputs.build_tools_ref }}
+      package_ref: ${{ steps.meta.outputs.package_ref }}
+      push_latest: ${{ steps.meta.outputs.push_latest }}
+    steps:
+      - id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_PACKAGE_VERSION: ${{ inputs.package_version || '' }}
+          INPUT_DOCUMENTSERVER_REF: ${{ inputs.documentserver_ref || '' }}
+          INPUT_BUILD_TOOLS_REF: ${{ inputs.build_tools_ref || '' }}
+          INPUT_PACKAGE_REF: ${{ inputs.package_ref || '' }}
+          INPUT_PUSH_LATEST: ${{ inputs.push_latest || false }}
+        run: |
+          set -euo pipefail
+
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            PACKAGE_VERSION="${INPUT_PACKAGE_VERSION}"
+          else
+            PACKAGE_VERSION="${REF_NAME#v}"
+          fi
+
+          if [[ ! "${PACKAGE_VERSION}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)-([0-9]+)$ ]]; then
+            echo "::error::Package version must look like 9.4.0-129, got '${PACKAGE_VERSION}'"
+            exit 1
+          fi
+
+          PRODUCT_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          BUILD_NUMBER="${BASH_REMATCH[4]}"
+          SOURCE_REF="${PACKAGE_VERSION}"
+
+          DOCUMENTSERVER_REF="${INPUT_DOCUMENTSERVER_REF:-${SOURCE_REF}}"
+          BUILD_TOOLS_REF="${INPUT_BUILD_TOOLS_REF:-${SOURCE_REF}}"
+          PACKAGE_REF="${INPUT_PACKAGE_REF:-${SOURCE_REF}}"
+
+          {
+            echo "product_version=${PRODUCT_VERSION}"
+            echo "build_number=${BUILD_NUMBER}"
+            echo "package_version=${PACKAGE_VERSION}"
+            echo "image_tag=${PACKAGE_VERSION}"
+            echo "source_ref=${SOURCE_REF}"
+            echo "documentserver_ref=${DOCUMENTSERVER_REF}"
+            echo "build_tools_ref=${BUILD_TOOLS_REF}"
+            echo "package_ref=${PACKAGE_REF}"
+            echo "push_latest=${INPUT_PUSH_LATEST}"
+          } >> "${GITHUB_OUTPUT}"
+
+          {
+            echo "## FurtherRef release"
+            echo "- package_version: \`${PACKAGE_VERSION}\`"
+            echo "- documentserver_ref: \`${DOCUMENTSERVER_REF}\`"
+            echo "- build_tools_ref: \`${BUILD_TOOLS_REF}\`"
+            echo "- package_ref: \`${PACKAGE_REF}\`"
+            echo "- image: \`${{ env.IMAGE_NAME }}:${PACKAGE_VERSION}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  build-deb:
+    name: Build ${{ matrix.arch }} deb
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+            build_platform: linux_64
+            package_uname_m: x86_64
+            qt_target: amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            build_platform: linux_arm64
+            package_uname_m: aarch64
+            qt_target: arm64
+    steps:
+      - name: Checkout Docker workflow repository
+        uses: actions/checkout@v4
+        with:
+          path: onlyoffice-documentserver-docker
+
+      - name: Checkout build tools
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.BUILD_TOOLS_REPO }}
+          ref: ${{ needs.meta.outputs.build_tools_ref }}
+          path: build_tools
+          fetch-depth: 0
+
+      - name: Checkout DocumentServer
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DOCUMENTSERVER_REPO }}
+          ref: ${{ needs.meta.outputs.documentserver_ref }}
+          path: onlyoffice-documentserver
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Checkout document-server-package
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PACKAGE_REPO }}
+          ref: ${{ needs.meta.outputs.package_ref }}
+          path: document-server-package
+          fetch-depth: 0
+
+      - name: Checkout document-server-integration
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE/document-server-integration
+          ref: v9.4.0.103
+          path: document-server-integration
+
+      - name: Checkout sdkjs-forms
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE/sdkjs-forms
+          ref: v9.4.0.119
+          path: sdkjs-forms
+
+      - name: Checkout ONLYOFFICE plugin store
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE/onlyoffice.github.io
+          ref: v0.0.51
+          path: onlyoffice.github.io
+
+      - name: Restore build tool cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build_tools/tools/linux/python3
+            build_tools/tools/linux/qt_build
+            build_tools/tools/linux/sysroot
+          key: furtherref-build-tools-${{ runner.os }}-${{ matrix.arch }}-v1
+
+      - name: Build deb package
+        shell: bash
+        env:
+          PRODUCT_VERSION: ${{ needs.meta.outputs.product_version }}
+          BUILD_NUMBER: ${{ needs.meta.outputs.build_number }}
+          SOURCE_REF: ${{ needs.meta.outputs.source_ref }}
+          BUILD_PLATFORM: ${{ matrix.build_platform }}
+          PACKAGE_UNAME_M: ${{ matrix.package_uname_m }}
+          DEB_ARCH: ${{ matrix.arch }}
+          QT_TARGET: ${{ matrix.qt_target }}
+        run: onlyoffice-documentserver-docker/.github/scripts/build-documentserver-deb.sh
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentserver-deb-${{ matrix.arch }}
+          path: artifacts/onlyoffice-documentserver_${{ needs.meta.outputs.package_version }}_${{ matrix.arch }}.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  build-image:
+    name: Build ${{ matrix.arch }} image
+    needs: [meta, build-deb]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout Docker repository
+        uses: actions/checkout@v4
+
+      - name: Download deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: documentserver-deb-${{ matrix.arch }}
+          path: ci-packages
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image by architecture
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: documentserver-community
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ env.IMAGE_NAME }}:${{ needs.meta.outputs.image_tag }}-${{ matrix.arch }}
+          build-args: |
+            PACKAGE_VERSION=${{ needs.meta.outputs.package_version }}
+            TARGETARCH=${{ matrix.arch }}
+
+  publish-manifest:
+    name: Publish multi-arch manifest
+    needs: [meta, build-image]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create version manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:${{ needs.meta.outputs.image_tag }}" \
+            "${IMAGE_NAME}:${{ needs.meta.outputs.image_tag }}-amd64" \
+            "${IMAGE_NAME}:${{ needs.meta.outputs.image_tag }}-arm64"
+
+      - name: Create latest manifest
+        if: needs.meta.outputs.push_latest == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "${IMAGE_NAME}:latest" \
+            "${IMAGE_NAME}:${{ needs.meta.outputs.image_tag }}-amd64" \
+            "${IMAGE_NAME}:${{ needs.meta.outputs.image_tag }}-arm64"
+
+      - name: Inspect published image
+        shell: bash
+        run: docker buildx imagetools inspect "${IMAGE_NAME}:${{ needs.meta.outputs.image_tag }}"

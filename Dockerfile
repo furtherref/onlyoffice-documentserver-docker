@@ -67,6 +67,7 @@ RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d && \
 COPY config/supervisor/supervisor /etc/init.d/
 COPY config/supervisor/ds/*.conf /etc/supervisor/conf.d/
 COPY run-document-server.sh /app/ds/run-document-server.sh
+COPY ci-packages/ /tmp/ci-packages/
 
 EXPOSE 80 443
 
@@ -116,7 +117,11 @@ RUN if [ -n "${PRODUCT_EDITION}" ]; then \
     rm -rf /var/lib/apt/lists/*; fi
 
 RUN PACKAGE_FILE="${COMPANY_NAME}-${PRODUCT_NAME}${PRODUCT_EDITION}${PACKAGE_VERSION:+_$PACKAGE_VERSION}_${TARGETARCH:-$(dpkg --print-architecture)}.deb" && \
-    wget -q -P /tmp "$PACKAGE_BASEURL/$PACKAGE_FILE" && \
+    if [ -f "/tmp/ci-packages/$PACKAGE_FILE" ]; then \
+        cp "/tmp/ci-packages/$PACKAGE_FILE" "/tmp/$PACKAGE_FILE"; \
+    else \
+        wget -q -P /tmp "$PACKAGE_BASEURL/$PACKAGE_FILE"; \
+    fi && \
     apt-get -y update && \
     [ -n "${PRODUCT_EDITION}" ] && service postgresql start || true && \
     apt-get -yq install /tmp/$PACKAGE_FILE && \
@@ -133,6 +138,7 @@ RUN PACKAGE_FILE="${COMPANY_NAME}-${PRODUCT_NAME}${PRODUCT_EDITION}${PACKAGE_VER
     service supervisor stop && \
     chmod 755 /app/ds/*.sh && \
     rm -f /tmp/$PACKAGE_FILE && \
+    rm -rf /tmp/ci-packages && \
     rm -rf /var/log/$COMPANY_NAME && \
     rm -rf /var/lib/apt/lists/*
 

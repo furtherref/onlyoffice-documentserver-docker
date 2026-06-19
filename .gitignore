@@ -1,0 +1,4 @@
+ci-packages/*.deb
+ci-packages/*.ddeb
+ci-packages/*.buildinfo
+ci-packages/*.changes
