@@ -64,7 +64,12 @@ sudo apt-get install -y \
 git lfs install --local || true
 
 cd "${BUILD_TOOLS_DIR}/tools/linux"
-if [ ! -x ./python3/bin/python3 ]; then
+if [ "${DEB_ARCH}" = "arm64" ]; then
+  rm -rf ./python3
+  mkdir -p ./python3/bin
+  ln -s "$(command -v python3)" ./python3/bin/python3
+  ln -s python3 ./python3/bin/python
+elif [ ! -x ./python3/bin/python3 ]; then
   ./python.sh
 fi
 
