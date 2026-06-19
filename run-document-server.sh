@@ -402,6 +402,7 @@ update_ds_settings(){
     ${JSON_EXAMPLE} -I -e "this.server.token.enable = ${JWT_ENABLED}"
     ${JSON_EXAMPLE} -I -e "this.server.token.secret = '${JWT_SECRET}'"
     ${JSON_EXAMPLE} -I -e "this.server.token.authorizationHeader = '${JWT_HEADER}'"
+    ${JSON_EXAMPLE} -I -e "this.server.siteUrl = 'http://localhost/'"
   fi
  
   if [ "${USE_UNAUTHORIZED_STORAGE}" == "true" ]; then
@@ -667,6 +668,13 @@ update_nginx_settings(){
 
   if [ -f "${NGINX_ONLYOFFICE_EXAMPLE_CONF}" ]; then
     sed 's/linux/docker/' -i ${NGINX_ONLYOFFICE_EXAMPLE_CONF}
+    if ! grep -q 'location = /example' ${NGINX_ONLYOFFICE_EXAMPLE_CONF}; then
+      sed -i '/location \/example\/ {/i\
+location = /example {\
+  return 301 $the_scheme://$the_host$the_prefix/example/;\
+}\
+' ${NGINX_ONLYOFFICE_EXAMPLE_CONF}
+    fi
   fi
 
   start_process documentserver-update-securelink.sh -s ${SECURE_LINK_SECRET:-$(pwgen -s 20)} -r false
@@ -683,6 +691,42 @@ update_logrotate_settings(){
 update_release_date(){
   mkdir -p ${PRIVATE_DATA_DIR}
   echo ${RELEASE_DATE} > ${DS_RELEASE_DATE}
+}
+
+fix_static_asset_compatibility(){
+  local DOC_FORMATS_DIR="${APP_DIR}/web-apps/apps/common/main/resources/img/doc-formats"
+  local DOC_FORMATS_SPRITE="${DOC_FORMATS_DIR}/formats@2.5x.svg"
+
+  if [ -d "${DOC_FORMATS_DIR}" ] && [ ! -s "${DOC_FORMATS_SPRITE}" ]; then
+    local TMP_SPRITE
+    TMP_SPRITE=$(mktemp)
+    printf '<svg xmlns="http://www.w3.org/2000/svg">\n' > "${TMP_SPRITE}"
+
+    for FORMAT_ICON in "${DOC_FORMATS_DIR}"/*.svg; do
+      [ -f "${FORMAT_ICON}" ] || continue
+      local ICON_FILE ICON_ID VIEWBOX WIDTH HEIGHT CONTENT
+      ICON_FILE=$(basename "${FORMAT_ICON}")
+      [ "${ICON_FILE}" = "formats@2.5x.svg" ] && continue
+      ICON_ID="${ICON_FILE%.svg}"
+      VIEWBOX=$(grep -o 'viewBox="[^"]*"' "${FORMAT_ICON}" | head -1 | cut -d '"' -f 2 || true)
+      if [ -z "${VIEWBOX}" ]; then
+        WIDTH=$(grep -o 'width="[0-9.]*"' "${FORMAT_ICON}" | head -1 | cut -d '"' -f 2 || true)
+        HEIGHT=$(grep -o 'height="[0-9.]*"' "${FORMAT_ICON}" | head -1 | cut -d '"' -f 2 || true)
+        VIEWBOX="0 0 ${WIDTH:-24} ${HEIGHT:-30}"
+      fi
+      CONTENT=$(perl -0pe 's/^<svg[^>]*>//; s#</svg>\s*$##' "${FORMAT_ICON}")
+      printf '<symbol id="%s" viewBox="%s">%s</symbol>\n' "${ICON_ID}" "${VIEWBOX}" "${CONTENT}" >> "${TMP_SPRITE}"
+    done
+
+    printf '</svg>\n' >> "${TMP_SPRITE}"
+    mv "${TMP_SPRITE}" "${DOC_FORMATS_SPRITE}"
+    chmod 644 "${DOC_FORMATS_SPRITE}"
+    gzip -kf "${DOC_FORMATS_SPRITE}" && chmod 644 "${DOC_FORMATS_SPRITE}.gz"
+  fi
+
+  local AI_TRANSLATIONS_DIR="${APP_DIR}/sdkjs-plugins/{9DC93CDB-B576-4F0C-B55E-FCC9C48DD007}/translations"
+  [ -f "${AI_TRANSLATIONS_DIR}/zh-CN.json" ] && [ ! -e "${AI_TRANSLATIONS_DIR}/zh-ZH.json" ] && ln -s zh-CN.json "${AI_TRANSLATIONS_DIR}/zh-ZH.json"
+  [ -f "${AI_TRANSLATIONS_DIR}/helpers/zh-CN.json" ] && [ ! -e "${AI_TRANSLATIONS_DIR}/helpers/zh-ZH.json" ] && ln -s zh-CN.json "${AI_TRANSLATIONS_DIR}/helpers/zh-ZH.json"
 }
 
 # create base folders
@@ -803,6 +847,7 @@ if [ ${ONLYOFFICE_DATA_CONTAINER} != "true" ]; then
   fi
 
   update_nginx_settings
+  fix_static_asset_compatibility
   
   if [ "${PLUGINS_ENABLED}" = "true" ]; then
     ( documentserver-pluginsmanager.sh -r false --update="${APP_DIR}/sdkjs-plugins/plugin-list-default.json" >/dev/null; echo "[pluginsmanager] Plugins initialization finished" >/proc/1/fd/1 ) &
