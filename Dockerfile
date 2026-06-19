@@ -23,19 +23,23 @@ ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8 DEBIAN_FRONTEND=nonint
 
 ARG ONLYOFFICE_VALUE=onlyoffice
 COPY fonts/ /usr/share/fonts/truetype/
+COPY install-mscorefonts.sh /tmp/install-mscorefonts.sh
 
 RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d && \
     apt-get -y update && \
-    apt-get -yq install wget apt-transport-https gnupg locales lsb-release && \
+    apt-get -yq install wget ca-certificates apt-transport-https gnupg locales lsb-release && \
     locale-gen en_US.UTF-8 && \
-    echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections && \
     ACCEPT_EULA=Y apt-get -yq install \
         adduser \
         apt-utils \
         bomstrip \
+        cabextract \
         certbot \
         cron \
         curl \
+        fontconfig \
+        fonts-liberation \
+        fonts-liberation-sans-narrow \
         htop \
         libasound2${PACKAGE_SUFFIX} \
         libcairo2 \
@@ -55,13 +59,14 @@ RUN echo "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d && \
         pwgen \
         sudo \
         supervisor \
-        ttf-mscorefonts-installer \
         unzip \
         xvfb \
         xxd \
         zlib1g && \
+    bash /tmp/install-mscorefonts.sh && \
     if [  $(find /usr/share/fonts/truetype/msttcorefonts -maxdepth 1 -type f -iname '*.ttf' | wc -l) -lt 30 ]; \
         then echo 'msttcorefonts failed to download'; exit 1; fi  && \
+    rm -f /tmp/install-mscorefonts.sh && \
     rm -rf /var/lib/apt/lists/*
 
 COPY config/supervisor/supervisor /etc/init.d/
