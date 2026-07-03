@@ -850,7 +850,7 @@ if [ ${ONLYOFFICE_DATA_CONTAINER} != "true" ]; then
   fix_static_asset_compatibility
   
   if [ "${PLUGINS_ENABLED}" = "true" ]; then
-    ( documentserver-pluginsmanager.sh -r false --update="${APP_DIR}/sdkjs-plugins/plugin-list-default.json" >/dev/null; echo "[pluginsmanager] Plugins initialization finished" >/proc/1/fd/1 ) &
+    ( documentserver-pluginsmanager.sh -r false --update="${APP_DIR}/sdkjs-plugins/plugin-list-default.json" >/dev/null; fix_static_asset_compatibility; echo "[pluginsmanager] Plugins initialization finished" >/proc/1/fd/1 ) &
   fi
 
   ${ADMINPANEL_AVAILABLE} && [ "${ADMINPANEL_ENABLED:-false}" = "true" ] && sed -i 's,autostart=false,autostart=true,' ${SUPERVISOR_CONF_DIR}/ds-adminpanel.conf
