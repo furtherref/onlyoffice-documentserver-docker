@@ -14,9 +14,9 @@ on:
         default: "9.4.0"
         type: string
       build_tools_ref:
-        description: "Ref in ONLYOFFICE/build_tools"
+        description: "Ref in furtherref/onlyoffice-build-tools"
         required: false
-        default: "release/v9.4.0"
+        default: "9.4.0"
         type: string
       package_ref:
         description: "Ref in furtherref/onlyoffice-documentserver-package"
@@ -39,7 +39,7 @@ permissions:
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/documentserver
   DOCUMENTSERVER_REPO: furtherref/onlyoffice-documentserver
-  BUILD_TOOLS_REPO: ONLYOFFICE/build_tools
+  BUILD_TOOLS_REPO: furtherref/onlyoffice-build-tools
   PACKAGE_REPO: furtherref/onlyoffice-documentserver-package
 
 jobs:
@@ -84,10 +84,9 @@ jobs:
           PRODUCT_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
           BUILD_NUMBER="${BASH_REMATCH[4]}"
           SOURCE_REF="${PRODUCT_VERSION}"
-          OFFICIAL_BUILD_TOOLS_REF="release/v${PRODUCT_VERSION}"
 
           DOCUMENTSERVER_REF="${INPUT_DOCUMENTSERVER_REF:-${SOURCE_REF}}"
-          BUILD_TOOLS_REF="${INPUT_BUILD_TOOLS_REF:-${OFFICIAL_BUILD_TOOLS_REF}}"
+          BUILD_TOOLS_REF="${INPUT_BUILD_TOOLS_REF:-${SOURCE_REF}}"
           PACKAGE_REF="${INPUT_PACKAGE_REF:-${SOURCE_REF}}"
 
           {
